@@ -5,6 +5,7 @@ import { rateLimit } from 'express-rate-limit';
 import Inquiry from '../models/Inquiry.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { acceptReferenceImage, uploadDirectory } from '../middleware/upload.js';
+import { sendWhatsAppNotification, buildInquiryWhatsAppMessage, getDirectWhatsAppUrl } from '../services/whatsapp.js';
 
 const router = Router();
 const submissionLimit = rateLimit({
@@ -34,7 +35,20 @@ router.post('/', submissionLimit, acceptReferenceImage, async (req, res, next) =
       clientName, phone, email, productName, message,
       referenceImageName: req.file?.filename || null
     });
-    return res.status(201).json({ message: 'Your inquiry has been sent successfully.', id: inquiry.id });
+
+    let whatsappResult = null;
+    try {
+      whatsappResult = await sendWhatsAppNotification(inquiry, process.env.CLIENT_ORIGIN || 'http://localhost:4200');
+    } catch (waErr) {
+      console.error('[WhatsApp Notification error]', waErr);
+    }
+
+    return res.status(201).json({
+      message: 'Your inquiry has been sent successfully.',
+      id: inquiry.id,
+      whatsappUrl: whatsappResult?.directUrl || '',
+      whatsappSent: Boolean(whatsappResult?.sentViaApi)
+    });
   } catch (error) {
     if (req.file) await fs.unlink(req.file.path).catch(() => {});
     return next(error);
@@ -113,6 +127,19 @@ router.get('/admin/inquiries/:id/image', async (req, res, next) => {
     return res.sendFile(path.join(uploadDirectory, path.basename(inquiry.referenceImageName)), (error) => {
       if (error && !res.headersSent) next(error);
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/admin/inquiries/:id/whatsapp-alert', async (req, res, next) => {
+  try {
+    const inquiry = await Inquiry.findById(req.params.id).lean();
+    if (!inquiry) return res.status(404).json({ message: 'Inquiry not found.' });
+    const adminPhone = process.env.ADMIN_WHATSAPP_PHONE || '';
+    const message = buildInquiryWhatsAppMessage(inquiry, process.env.CLIENT_ORIGIN || 'http://localhost:4200');
+    const directUrl = adminPhone ? getDirectWhatsAppUrl(adminPhone, message) : '';
+    return res.json({ adminPhone, message, directUrl });
   } catch (error) {
     return next(error);
   }

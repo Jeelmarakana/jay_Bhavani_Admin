@@ -9,8 +9,12 @@ const API = 'http://localhost:3000/api';
 export class InquiryService {
   private readonly http = inject(HttpClient);
 
-  submit(form: FormData): Observable<{ message: string; id: string }> {
-    return this.http.post<{ message: string; id: string }>(`${API}/inquiries`, form);
+  submit(form: FormData): Observable<{ message: string; id: string; whatsappUrl?: string; whatsappSent?: boolean }> {
+    return this.http.post<{ message: string; id: string; whatsappUrl?: string; whatsappSent?: boolean }>(`${API}/inquiries`, form);
+  }
+
+  getWhatsAppAlert(id: string): Observable<{ adminPhone: string; message: string; directUrl: string }> {
+    return this.http.get<{ adminPhone: string; message: string; directUrl: string }>(`${API}/inquiries/admin/inquiries/${encodeURIComponent(id)}/whatsapp-alert`);
   }
 
   dashboard(): Observable<DashboardStats> {

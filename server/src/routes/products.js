@@ -19,7 +19,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const productMulterUpload = multer({
+export const productMulterUpload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, callback) => {
@@ -29,8 +29,6 @@ const productMulterUpload = multer({
     return callback(null, true);
   }
 });
-
-export const productMulterUpload = productMulterUpload;
 
 const productImageUpload = async (req, res, next) => {
   productMulterUpload.single('image')(req, res, async (error) => {
@@ -61,7 +59,7 @@ const router = Router();
 router.post('/', productImageUpload, async (req, res, next) => {
   try {
     const { name, description, price, category } = req.body;
-    if (!name || !price) {
+    if (!name || price === undefined || price === null || price === '') {
       if (req.file) await fs.unlink(req.file.path).catch(() => {});
       return res.status(400).json({ message: 'Name and price are required.' });
     }
@@ -72,7 +70,14 @@ router.post('/', productImageUpload, async (req, res, next) => {
       category: String(category || '').trim(),
       images: req.file ? [req.file.filename] : []
     });
-    return res.status(201).json({ message: 'Product added successfully.', product });
+    const doc = product.toObject ? product.toObject() : product;
+    return res.status(201).json({
+      message: 'Product added successfully.',
+      product: {
+        ...doc,
+        image: doc.images && doc.images.length > 0 ? doc.images[0] : null
+      }
+    });
   } catch (error) {
     if (req.file) await fs.unlink(req.file.path).catch(() => {});
     return next(error);
@@ -81,8 +86,12 @@ router.post('/', productImageUpload, async (req, res, next) => {
 
 router.get('/', async (_req, res, next) => {
   try {
-    const products = await Product.find().select('-__v').lean();
-    return res.json(products);
+    const products = await Product.find().sort({ createdAt: -1 }).select('-__v').lean();
+    const formatted = products.map((p) => ({
+      ...p,
+      image: p.images && p.images.length > 0 ? p.images[0] : null
+    }));
+    return res.json(formatted);
   } catch (error) {
     return next(error);
   }
@@ -92,7 +101,10 @@ router.get('/:id', async (req, res, next) => {
   try {
     const product = await Product.findById(req.params.id).select('-__v').lean();
     if (!product) return res.status(404).json({ message: 'Product not found.' });
-    return res.json(product);
+    return res.json({
+      ...product,
+      image: product.images && product.images.length > 0 ? product.images[0] : null
+    });
   } catch (error) {
     return next(error);
   }
@@ -100,21 +112,24 @@ router.get('/:id', async (req, res, next) => {
 
 router.patch('/:id', productImageUpload, async (req, res, next) => {
   try {
-    const update = {
-      name: req.body.name && typeof req.body.name === 'string' ? req.body.name.trim() : undefined,
-      description: req.body.description && typeof req.body.description === 'string' ? req.body.description.trim() : undefined,
-      price: req.body.price !== undefined ? Number(req.body.price) : undefined,
-      category: req.body.category && typeof req.body.category === 'string' ? req.body.category.trim() : undefined
-    };
+    const update = {};
+    if (req.body.name !== undefined) update.name = String(req.body.name).trim();
+    if (req.body.description !== undefined) update.description = String(req.body.description || '').trim();
+    if (req.body.price !== undefined && req.body.price !== '') update.price = Number(req.body.price);
+    if (req.body.category !== undefined) update.category = String(req.body.category || '').trim();
 
     if (req.file) {
       update.images = [req.file.filename];
     }
 
     const product = await Product.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true })
-      .select('-__v');
+      .select('-__v')
+      .lean();
     if (!product) return res.status(404).json({ message: 'Product not found.' });
-    return res.json(product);
+    return res.json({
+      ...product,
+      image: product.images && product.images.length > 0 ? product.images[0] : null
+    });
   } catch (error) {
     if (req.file) await fs.unlink(req.file.path).catch(() => {});
     return next(error);

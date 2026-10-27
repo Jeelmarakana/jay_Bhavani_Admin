@@ -28,3 +28,15 @@ export interface DashboardStats {
   closed: number;
   today: number;
 }
+
+export interface Product {
+  _id: string;
+  name: string;
+  description?: string;
+  price: number | string;
+  category?: string;
+  images?: string[];
+  image?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}

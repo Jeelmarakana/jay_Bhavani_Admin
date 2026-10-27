@@ -25,7 +25,10 @@ import { Inquiry, InquiryStatus } from '../core/models';
             <label>Inquiry status<select [(ngModel)]="status"><option value="new">New</option><option value="contacted">Contacted</option><option value="closed">Closed</option></select></label>
             <label>Private admin note<textarea [(ngModel)]="adminNote" rows="4" maxlength="2000" placeholder="Add a reminder for your team..."></textarea></label>
             <button class="button" type="button" [disabled]="saving" (click)="save()">{{ saving ? 'Saving...' : 'Save changes' }}</button>
-            <a class="button button-outline whatsapp" [href]="whatsappLink" target="_blank" rel="noopener">Message on WhatsApp ↗</a>
+            <a class="button button-outline whatsapp" [href]="whatsappLink" target="_blank" rel="noopener">💬 Message Client on WhatsApp ↗</a>
+            @if (adminNotificationUrl) {
+              <a class="button button-outline" [href]="adminNotificationUrl" target="_blank" rel="noopener" style="margin-top: 8px; border-color: #25D366; color: #1b5e20;">📲 Send Summary to My WhatsApp ↗</a>
+            }
             <button class="text-button danger-text" type="button" (click)="remove()">Delete inquiry</button>
           </aside>
         </div>
@@ -43,10 +46,13 @@ export class InquiryDetailComponent implements OnDestroy {
   error = '';
   saved = false;
   saving = false;
+  adminNotificationUrl = '';
   private readonly id = this.route.snapshot.paramMap.get('id') || '';
 
   get whatsappLink(): string {
-    return `https://wa.me/${(this.item?.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(`Hello ${this.item?.clientName || ''}, regarding your ${this.item?.productName || ''} inquiry.`)}`;
+    const cleanPhone = (this.item?.phone || '').replace(/\D/g, '');
+    const greeting = encodeURIComponent(`નમસ્તે ${this.item?.clientName || ''}, જય ભવાની ઓર્નામેન્ટ્સ તરફથી. આપની "${this.item?.productName || ''}" અંગેની ઇન્કવાયરી સંદર્ભે સંપર્ક કર્યો છે.`);
+    return `https://wa.me/${cleanPhone}?text=${greeting}`;
   }
 
   constructor() {
@@ -60,6 +66,13 @@ export class InquiryDetailComponent implements OnDestroy {
         });
       },
       error: (error: HttpErrorResponse) => this.error = error.error?.message || 'Could not load this inquiry.'
+    });
+
+    this.service.getWhatsAppAlert(this.id).subscribe({
+      next: (res) => {
+        if (res?.directUrl) this.adminNotificationUrl = res.directUrl;
+      },
+      error: () => {}
     });
   }
 

@@ -1,7 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Router, RouterLink } from '@angular/router';
+import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { ProductService } from '../core/product.service';
 import { Product } from '../core/models';
 
@@ -23,57 +23,58 @@ import { Product } from '../core/models';
       @if (saved) { <div class="notice success" role="status">Product saved successfully.</div> }
 
       <form [formGroup]="form" (ngSubmit)="submit()" class="product-form">
-
-        @if (isEditing && product) {
-          <input type="hidden" formControlName="id">
-        }
-
         <div class="field">
           <label>Product name <span>*</span>
-            <input formControlName="name" autocomplete="product" required>
-            <small *ngIf="f['name'].touched && f['name'].invalid">{{ fieldError('name') }}</small>
+            <input formControlName="name" autocomplete="off" placeholder="e.g. Traditional Gold Necklace" required>
+            @if (f.name.touched && f.name.invalid) {
+              <small class="error-text">{{ fieldError('name') }}</small>
+            }
           </label>
         </div>
 
         <div class="field">
           <label>Category <span class="optional">(optional)</span>
-            <input formControlName="category" autocomplete="category" placeholder="e.g. Necklaces, Earrings">
+            <input formControlName="category" placeholder="e.g. Necklaces, Bangles, Rings">
           </label>
         </div>
 
         <div class="field">
           <label>Price (₹) <span>*</span>
-            <input formControlName="price" type="number" min="1" required>
-            <small *ngIf="f['price'].touched && f['price'].invalid">{{ fieldError('price') }}</small>
+            <input formControlName="price" type="number" min="1" placeholder="e.g. 45000" required>
+            @if (f.price.touched && f.price.invalid) {
+              <small class="error-text">{{ fieldError('price') }}</small>
+            }
           </label>
         </div>
 
         <div class="field">
           <label>Description <span class="optional">(optional)</span>
-            <textarea formControlName="description" rows="3" placeholder="Describe the product..."></textarea>
+            <textarea formControlName="description" rows="3" placeholder="Describe the jewellery item..."></textarea>
           </label>
         </div>
 
         <div class="field">
-          <label>Reference image <span class="optional">(optional)</span></label>
+          <label>Product image <span class="optional">(optional)</span></label>
           <div class="upload-container">
             <span class="upload-icon">＋</span>
-            <span>
-              <strong>Add/change image</strong>
-              <small>JPG, PNG, WebP · up to 5 MB</small>
-            </span>
-            <input type="file" accept="image/jpeg,image/png,image/webp" (change)="chooseImage($event)" style="display:none">
+            <label style="cursor: pointer; display: inline-block;">
+              <strong>Choose Image</strong>
+              <small> JPG, PNG, WebP · up to 5 MB</small>
+              <input type="file" accept="image/jpeg,image/png,image/webp" (change)="chooseImage($event)" style="display:none">
+            </label>
             @if (previewUrl) {
-              <div class="preview">
-                <img [src]="previewUrl" alt="Product preview">
-                <span>{{ imageName }}</span>
+              <div class="preview" style="margin-top: 10px;">
+                <img [src]="previewUrl" alt="Product preview" style="max-height: 120px; border-radius: 4px;">
+                <span style="display: block; font-size: 12px; margin-top: 4px;">{{ imageName }}</span>
                 <button type="button" class="text-button small" (click)="removeImage()">Remove</button>
               </div>
             }
           </div>
         </div>
 
-        <button class="button" type="submit" [disabled]="loading || form.invalid">{{ loading ? 'Saving...' : 'Save product' }} <span aria-hidden="true">→</span></button>
+        <button class="button" type="submit" [disabled]="loading || form.invalid">
+          {{ loading ? 'Saving...' : (isEditing ? 'Update Product' : 'Add Product') }} <span aria-hidden="true">→</span>
+        </button>
       </form>
     </section>
   `
@@ -82,37 +83,58 @@ export class ProductFormComponent {
   private readonly fb = inject(FormBuilder);
   private readonly service = inject(ProductService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+
   isEditing = false;
-  product: Product | null = null;
+  productId = '';
   loading = false;
-  success = false;
+  saved = false;
   error = '';
-  form = this.fb.nonNullable.group({
+  image: File | null = null;
+  previewUrl = '';
+  imageName = '';
+
+  readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required, Validators.maxLength(120)]],
     category: ['', [Validators.maxLength(80)]],
     price: ['', [Validators.required, Validators.min(1)]],
     description: ['', [Validators.maxLength(2000)]]
   });
-  image: File | null = null;
-  previewUrl = '';
-  imageName = '';
 
   get f() { return this.form.controls; }
 
   constructor() {
-    const nav = this.router.getCurrentNavigation();
-    const state = nav?.extras?.state as { product?: Product; isEditing?: boolean } | null;
-    this.isEditing = state?.isEditing ?? false;
-    this.product = state?.product ?? null;
-
-    if (this.product) {
-      this.form.patchValue({
-        name: this.product.name,
-        category: this.product.category,
-        price: this.product.price,
-        description: this.product.description
+    const id = this.route.snapshot.paramMap.get('id');
+    if (id) {
+      this.isEditing = true;
+      this.productId = id;
+      this.service.get(id).subscribe({
+        next: (product) => {
+          this.form.patchValue({
+            name: product.name,
+            category: product.category,
+            price: String(product.price),
+            description: product.description
+          });
+          const img = product.image || (product.images && product.images.length ? product.images[0] : '');
+          if (img) {
+            this.previewUrl = `http://localhost:3000/uploads/${img}`;
+            this.imageName = img;
+          }
+        },
+        error: (err: HttpErrorResponse) => {
+          this.error = err.error?.message || 'Could not load product details.';
+        }
       });
     }
+  }
+
+  fieldError(name: 'name' | 'price'): string {
+    const control = this.form.controls[name];
+    if (control.hasError('required')) return 'This field is required.';
+    if (control.hasError('min')) return 'Price must be greater than 0.';
+    if (control.hasError('maxlength')) return 'Value is too long.';
+    return '';
   }
 
   chooseImage(event: Event): void {
@@ -132,16 +154,23 @@ export class ProductFormComponent {
   }
 
   removeImage(): void {
-    if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
+    if (this.previewUrl && !this.previewUrl.startsWith('http')) {
+      URL.revokeObjectURL(this.previewUrl);
+    }
     this.previewUrl = '';
     this.imageName = '';
     this.image = null;
   }
 
-  onSubmit(): void {
+  submit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
     this.error = '';
     this.loading = true;
-    this.success = false;
+    this.saved = false;
 
     const formData = new FormData();
     formData.append('name', this.form.value.name ?? '');
@@ -150,24 +179,20 @@ export class ProductFormComponent {
     formData.append('description', this.form.value.description ?? '');
     if (this.image) formData.append('image', this.image);
 
-    this.service.update(this.product?._id ?? '', formData).subscribe({
-      next: (product) => {
+    const request$ = this.isEditing && this.productId
+      ? this.service.update(this.productId, formData)
+      : this.service.create(formData);
+
+    request$.subscribe({
+      next: () => {
         this.loading = false;
-        this.success = true;
-        setTimeout(() => this.router.navigateByUrl('/admin/products'), 2000);
+        this.saved = true;
+        setTimeout(() => this.router.navigateByUrl('/admin/products'), 1500);
       },
       error: (error: HttpErrorResponse) => {
         this.loading = false;
         this.error = error.error?.message || 'Could not save product.';
       }
     });
-  }
-
-  submit(): void {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
-      return;
-    }
-    this.onSubmit();
   }
 }

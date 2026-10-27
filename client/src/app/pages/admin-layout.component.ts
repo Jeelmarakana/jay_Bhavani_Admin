@@ -1,11 +1,11 @@
 import { Component, inject } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../core/auth.service';
 
 @Component({
   selector: 'app-admin-layout',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet],
   template: `
     <aside class="admin-sidebar">
       <div class="sidebar-header">
@@ -36,9 +36,11 @@ import { AuthService } from '../core/auth.service';
     <main class="admin-main">
       <header class="admin-header">
         <h1>Admin Panel</h1>
-        <button class="menu-button" (click)="toggleMenu()" *ngIf="!isMenuFixed">
-          <span></span><span></span><span></span>
-        </button>
+        @if (!isMenuFixed) {
+          <button class="menu-button" (click)="toggleMenu()">
+            <span></span><span></span><span></span>
+          </button>
+        }
       </header>
 
       <router-outlet></router-outlet>
@@ -46,7 +48,7 @@ import { AuthService } from '../core/auth.service';
   `
 })
 export class AdminLayoutComponent {
-  private readonly auth = inject(AuthService);
+  readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   isMenuFixed = false;
 

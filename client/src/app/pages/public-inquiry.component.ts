@@ -15,8 +15,26 @@ import { InquiryService } from '../core/inquiry.service';
     <section class="form-card">
       <div class="section-heading"><span class="eyebrow">LET'S BEGIN</span><h2>Send a product inquiry</h2><p>Tell us what you are looking for. A design reference photo is optional.</p></div>
       @if (success) {
-        <div class="notice success" role="status"><strong>Thank you for reaching out.</strong><br>Your inquiry has been received. Our team will contact you soon.</div>
-        <button class="button button-outline" type="button" (click)="reset()">Send another inquiry</button>
+        <div class="notice success" role="status">
+          <strong>તમારી ઇન્કવાયરી સફળતાપૂર્વક સબમિટ થઈ ગઈ છે!</strong><br>
+          Your inquiry has been recorded in our Admin Panel.
+          @if (whatsappSent) {
+            <p style="margin: 8px 0 0 0; color: #2e7d32; font-weight: 500;">✓ Owner has been notified via WhatsApp notification!</p>
+          }
+        </div>
+        @if (whatsappUrl) {
+          <div style="margin: 16px 0; padding: 16px; background: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 8px;">
+            <p style="margin: 0 0 10px 0; color: #1b5e20; font-size: 14px; font-weight: 600;">
+              💬 અમારો સીધો WhatsApp પર સંપર્ક કરવા નીચે ક્લિક કરો:
+            </p>
+            <a class="button button-whatsapp" [href]="whatsappUrl" target="_blank" rel="noopener" style="display: inline-flex; align-items: center; gap: 8px; background: #25D366; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 600;">
+              <span>📲</span> Open WhatsApp with Jay Bhavani
+            </a>
+          </div>
+        }
+        <div style="margin-top: 16px;">
+          <button class="button button-outline" type="button" (click)="reset()">Send another inquiry</button>
+        </div>
       } @else {
         @if (error) { <div class="notice error" role="alert">{{ error }}</div> }
         <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
@@ -58,6 +76,8 @@ export class PublicInquiryComponent {
   image: File | null = null;
   previewUrl = '';
   imageName = '';
+  whatsappUrl = '';
+  whatsappSent = false;
 
   fieldError(name: keyof typeof this.form.controls): string {
     const control = this.form.controls[name];
@@ -102,7 +122,14 @@ export class PublicInquiryComponent {
     this.loading = true;
     this.error = '';
     this.inquiries.submit(body).subscribe({
-      next: () => { this.loading = false; this.success = true; this.form.reset(); this.removeImage(); },
+      next: (res) => {
+        this.loading = false;
+        this.success = true;
+        this.whatsappUrl = res.whatsappUrl || '';
+        this.whatsappSent = Boolean(res.whatsappSent);
+        this.form.reset();
+        this.removeImage();
+      },
       error: (error: HttpErrorResponse) => {
         this.loading = false;
         this.error = error.error?.message || 'We could not send your inquiry. Please try again.';
@@ -110,5 +137,10 @@ export class PublicInquiryComponent {
     });
   }
 
-  reset(): void { this.success = false; this.error = ''; }
+  reset(): void {
+    this.success = false;
+    this.error = '';
+    this.whatsappUrl = '';
+    this.whatsappSent = false;
+  }
 }
